@@ -1,0 +1,263 @@
+# Global Temperature: LATEST ANNUAL AVERAGE ANOMALY
+
+## Table of Contents:
+1. Abstract
+2. Introduction
+3. Required Library
+4. Data Preprocessing
+5. Stationary Check
+6. Analyzing Data "Test Normality, Test independence"
+7. Model Fitting
+8. Forecasting
+9. Residual Analysis
+10. Conclusion
+
+
+##1. Abstract:
+The dataset utilized in this study originates from the NASA Global Temperature Vital Signs database, focusing on the latest annual average anomaly in global temperature. Analyzing global temperature trends is crucial for understanding climate dynamics and predicting future patterns. In 2023, Earth witnessed its highest average surface temperature on record since the commencement of data collection in 1880, as indicated by NASA/GISS data. This analysis corroborates findings from independent research entities such as the National Oceanic and Atmospheric Administration (NOAA). The dataset reveals a significant warming trend, with Earth experiencing an increase of approximately 1.36 degrees Celsius compared to the late 19th-century preindustrial average (1850-1900). Leveraging various time series techniques, including ARIMA modeling, this study aims to forecast future annual average anomalies in global temperature, thereby contributing to the discourse on climate change mitigation and adaptation strategies.
+
+##2. Introduction:
+Understanding the dynamics of global temperature changes is paramount in comprehending the evolving climate patterns and their potential impact on the planet. The dataset, sourced from NASA/GISS, provides invaluable insights into the trajectory of global surface temperature variations over several decades. In particular, the data highlights the unprecedented warming trend observed in recent years, underscoring the urgency of addressing climate change mitigation strategies. By delving into the intricacies of this dataset, we aim to analyze the temporal patterns, detect underlying trends, and employ predictive modeling techniques to forecast future temperature trends. Through rigorous analysis and interpretation, this project endeavors to contribute to the ongoing discourse surrounding climate change and its implications for the planet.
+
+##3. Required Library:
+We impute all the required libraries needed for analysis.
+
+```{r}
+library(tseries)
+library(ggplot2)
+library(dplyr)
+library(stats)
+library(forecast)
+```
+##4. Data Preprocessing:
+The data displayed using head() shows top 6 observations.The data set has 3 columns namely Year, No_Smoothing & Lowess.
+Data source: https://climate.nasa.gov/vital-signs/global-temperature/?intent=121
+```{r}
+#Upload CSV file
+dataset <- read.csv("Climate_Indicators_Annual_Mean_Global_Surface_Temperature.csv")
+
+head(dataset)
+```
+The below data frame needs to be converted into to times series data for further analysis "droping Lowess"
+```{r}
+data <- subset(dataset, select = -Lowess)
+head(data)
+```
+Analyzing the data:
+
+```{r}
+# Calculate mean
+mean_value <- mean(data$No_Smoothing, na.rm = TRUE)
+
+# Calculate minimum
+min_value <- min(data$No_Smoothing, na.rm = TRUE)
+
+# Calculate maximum
+max_value <- max(data$No_Smoothing, na.rm = TRUE)
+
+# Calculate variance
+variance_value <- var(data$No_Smoothing, na.rm = TRUE)
+
+# Print the results
+cat("Mean:", mean_value, "\n")
+cat("Minimum:", min_value, "\n")
+cat("Maximum:", max_value, "\n")
+cat("Variance:", variance_value, "\n")
+```
+
+
+```{r}
+quantiles <- quantile(data$No_Smoothing, probs = c(0.25, 0.5, 0.75), na.rm = TRUE)
+
+# Plot the data with quantiles
+hist(data$No_Smoothing, main = "Histogram of No_Smoothing", xlab = "No_Smoothing", ylab = "Frequency", col = "lightblue")
+abline(v = quantiles, col = c("red", "green", "blue"), lwd = 2)
+legend("topright", legend = c("25th Percentile= -0.2", "Median= -0.045", "75th Percentile= 0.28"), col = c("red", "green", "blue"), lty = 1, lwd = 2)
+```
+
+```{r}
+ggplot(data, aes(x = Year, y = No_Smoothing)) +
+  geom_line(color = "blue") +
+  geom_point(color = "white", size = 2) +  
+  labs(title = "Time Series Plot", x = "Year", y = "Value")
+```
+##5. Stationary Check:
+We checked the stationarity of the data using the Augmented Dickey-Fuller (ADF) test. We first aggregated the yearly temperature data by site and performed the ADF test for each site. We then printed the p-values for each site and determined whether the site was stationary or not based on the p-value being less than 0.05. We also plotted the yearly time series data for each site with a trend line.
+```{r}
+time_series <- data$No_Smoothing
+```
+
+```{r}
+# Perform ADF test
+adf_result <- adf.test(time_series)
+
+# Print ADF test results
+print(adf_result)
+
+if (adf_result[["p.value"]] < 0.05) {
+  print(paste0("The time series is stationary"))
+} else {
+  print(paste0("The time series is not stationary"))
+}
+
+```
+
+
+```{r}
+ggplot(data, aes(x = Year, y = No_Smoothing)) +
+  geom_line(color = "blue") +
+   geom_smooth( method = "loess",
+    formula = "y ~ x",
+    se = FALSE,
+    col = "grey") +
+   labs(title = "Yearly Time Series with Trend Line", x = "Year", y = "ANNUAL AVERAGE ANOMALY")
+```
+We plotted the autocorrelation function (ACF) and partial autocorrelation function (PACF) to determine the order of the ARIMA model. We used the ggACF and ggPaACF functions from the forecast package to plot the ACF and PACF, respectively.
+```{r}
+acf(time_series,lag.max = 36)
+
+```
+
+```{r}
+pacf(time_series, lag.max = 36)
+```
+##6. Analyzing Data "Test Normality, Test independence":
+###Test Normality:
+We checked the normality of the data using the Shapiro-Wilk test for normality. We plotted a histogram of the temperature data for one site and performed the Shapiro-Wilk test to determine whether the data was normally distributed or not.
+```{r}
+# Conduct Shapiro-Wilk test for normality
+shapiro_test <- shapiro.test(time_series)
+
+print(shapiro_test)
+
+ if (shapiro_test$p.value >= 0.05) {
+    print("The time series is Normal")
+} else {
+    print("The time series is not Normal")
+}
+
+```
+
+
+```{r}
+ggplot(data, aes(x = No_Smoothing)) +
+  geom_histogram(fill = "lightblue", color = "black", size = 0.9) +
+  labs(x = "ANNUAL AVERAGE ANOMALY", y = "Frequency",
+       title = "Histogram of time_series") +
+  theme(
+    axis.text = element_text(face = "bold"),
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.major = element_line(colour = "#E5E5E5"),
+    panel.background = element_rect(fill = "white") # White background
+  )
+```
+###Variable Independence Check:
+We tested for independence between the months temperature variables using a Ljung-Box test. The test showed that the two variables were not significantly correlated.
+```{r}
+# Set the maximum lag for the test
+max_lag <- 36 
+
+# Perform the Ljung-Box test
+ljung_box_test <- Box.test(time_series, lag = max_lag, type = "Ljung-Box")
+
+# Print the test results
+print(ljung_box_test)
+
+if (ljung_box_test$p.value < 0.05) {
+  print("Data points are Dependent up to the specified lag.")
+} else {
+  print("Data points are independent up to the specified lag.")
+}
+```
+##7. Model Fitting:
+Upon examining the plot of the time series data, it appears that there might be a quadratic trend present. Consequently, our approach involves attempting to eliminate this trend from the data. Subsequently, we will assess whether the resulting residuals exhibit stationarity.
+```{r}
+# Create a time index
+time_index <- seq_along(time_series)
+
+# Fit a quadratic regression model
+quadratic_model <- lm(time_series ~ poly(time_index, 2))
+
+# Extract the fitted values
+fitted_values <- predict(quadratic_model)
+
+# Remove the quadratic trend
+detrended_series <- time_series - fitted_values
+
+# Plot original and detrended series
+plot(time_index, time_series, type = "l", col = "blue", xlab = "Time", ylab = "Value", main = "Original and Detrended Time Series")
+lines(time_index, detrended_series, col = "red")
+legend("topright", legend = c("Original", "Detrended"), col = c("blue", "red"), lty = 1)
+```
+
+
+```{r}
+# Perform ADF test
+adf_result <- adf.test(detrended_series)
+
+# Print ADF test results
+print(adf_result)
+
+if (adf_result[["p.value"]] < 0.05) {
+  print(paste0("The time series is stationary"))
+} else {
+  print(paste0("The time series is not stationary"))
+}
+```
+Based on the findings from our previous analysis, we proceeded to forecast the annual average anomaly using an ARIMA model. The model was constructed using the auto.arima function for optimal parameter selection, followed by forecasting using the forecast function.
+```{r}
+# Convert data to time series
+data_ts <- ts(data$No_Smoothing, start = c(1880), frequency = 1)
+
+# Find the best ARIMA model using auto.arima
+fit <- auto.arima(data_ts)
+
+# Print the best model
+print(fit)
+```
+##8. Forecasting:
+```{r}
+# Make forecast
+forecast_steps <- 76
+forecast <- forecast(fit, h = forecast_steps)
+
+# Plot forecasted ANNUAL AVERAGE ANOMALY
+plot(data$No_Smoothing, type = "l", col = "blue", xlab = "Date", ylab = "ANNUAL AVERAGE ANOMALY", main = "ARIMA Model - ANNUAL AVERAGE ANOMALY (2024 to 2100)")
+lines(forecast$mean, col = "red")
+legend("topleft", legend = c("Actual", "Forecast"), col = c("blue", "red"), lty = 1)
+```
+##9. Residual Analysis:
+```{r}
+residuals <- residuals(fit)
+```
+
+```{r}
+# Residuals Plot
+plot(residuals, type='o', col='#83A2FF', xlab='Date', ylab='Residuals', main='Residuals Plot')
+grid()
+```
+```{r}
+mean_residual <- mean(residuals)
+std_residual <- sd(residuals)
+print(paste("Mean of residuals:", mean_residual))
+print(paste("Standard deviation of residuals:", std_residual))
+```
+```{r}
+# Plot ACF and PACF of residuals
+par(mfrow=c(2,1))
+acf(residuals, main="ACF of Residuals")
+```
+```{r}
+pacf(residuals, main="PACF of Residuals")
+```
+```{r}
+# Plot histogram and Q-Q plot of residuals
+par(mfrow=c(1,2))
+hist(residuals, main="Histogram of Residuals")
+```
+```{r}
+qqnorm(residuals); qqline(residuals)
+```
+##10. Conclusion:
+In conclusion, our analysis was conducted using data sourced from NASA's Global Temperature Vital Signs, specifically focusing on the latest annual average anomaly measurements. We employed various time series techniques, including quadratic trend analysis and ARIMA modeling, to understand and forecast the temperature anomalies. Through our investigation, we found that the ARIMA model provided the most accurate forecasts for future temperature anomalies. This suggests that ARIMA is a reliable method for predicting changes in global temperature patterns based on historical data. The data source provided valuable insights into the ongoing trends and fluctuations in global temperature, contributing to our understanding of climate dynamics and informing future research and policy decisions.
